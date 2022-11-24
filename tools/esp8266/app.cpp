@@ -53,8 +53,12 @@ static    int extra =  0;
     float totalYield = 0.000, totalYieldToday = 0.000, totalActual = 0.0;
     char fmtText[32];
     int  ucnt=0;
+    int num_inv = mApp->mSys->getNumInverters();
+    unsigned int pow_i[ MAX_NUM_INVERTERS ];
 
-    for (uint8_t id = 0; id < mApp->mSys->getNumInverters(); id++)
+    memset( pow_i, 0, sizeof(unsigned int)* num_inv );
+
+    for (uint8_t id = 0; id < num_inv; id++)
     {
         Inverter<> *iv = mApp->mSys->getInverterByPos(id);
         if (NULL != iv)
@@ -81,7 +85,8 @@ static    int extra =  0;
                 }
 
                 if(fld == 0){
-                    totalActual += iv->getValue(pos,rec);
+                    pow_i[id] = iv->getValue(pos,rec);
+                    totalActual += pow_i[id];
                 }
             }
         }
@@ -89,42 +94,58 @@ static    int extra =  0;
 
     display.clear();
 
+static int rx=00;
+static char up=1;
+static int ex;
+    ex = 2*( extra % 5 );
+    if(up)
+    {
+        rx+=2;
+        if(rx>=20)
+        up=0;
+    }
+    else
+    {
+        rx-=2;
+        if(rx<=0)
+        up=1;
+    }
     if(ucnt)
     {
         display.setBrightness(63);
-        display.drawXbm(10,5,8,17,bmp_arrow);
+        display.drawXbm(10+ex,5,8,17,bmp_arrow);
         display.setFont(ArialMT_Plain_24);
         sprintf(fmtText,"%3.0f",totalActual);
-        display.drawString(25,0,String(fmtText)+F(" W"));
+        display.drawString(25+ex,0,String(fmtText)+F(" W"));
         display.setFont(ArialMT_Plain_16);
-        sprintf(fmtText,"%4.0f",totalYieldToday);
-        display.drawString(5,22,F("today ")+String(fmtText)+F(" Wh"));
-        sprintf(fmtText,"%.1f",totalYield);
-        display.drawString(5,35,F("total  ")+String(fmtText)+F(" kWh"));
+        if (( num_inv != 2 ) || !(extra%2))
+        {
+            sprintf(fmtText,"%4.0f",totalYieldToday);
+            display.drawString(5,22,F("today ")+String(fmtText)+F(" Wh"));
+            sprintf(fmtText,"%.1f",totalYield);
+            display.drawString(5,35,F("total  ")+String(fmtText)+F(" kWh"));
+        }
+        else
+        {
+            if( pow_i[0] )
+                display.drawString(15,22,F("#1  ")+String(pow_i[0])+F(" W"));
+            else
+                display.drawString(15,22,F("#1  -----"));
+            if( pow_i[1] )
+                display.drawString(15,35,F("#2  ")+String(pow_i[1])+F(" W"));
+            else
+                display.drawString(15,35,F("#2  -----"));
+        }
         display.drawLine(2,23,123,23);
     }
     else
     {
-static int rx=50;
-static char up=1;
-        if(up)
-        {
-            rx+=2;
-            if(rx>=70)
-            up=0;
-        }
-        else
-        {
-            rx-=2;
-            if(rx<=50)
-            up=1;
-        }
         display.setBrightness(1);
         display.setFont(ArialMT_Plain_24);
-        display.drawString(rx,10,F("off"));
+        display.drawString(rx+50,10,F("off"));
         display.setFont(ArialMT_Plain_16);
     }
-    if ( !(extra%20) )
+    if ( !(extra%10) || (timeStr.length()<16))
     {
         display.drawString(5,49,ip.toString());
     }
@@ -135,7 +156,7 @@ static char up=1;
         {
             String tt=timeStr.substring(9,17);
             w=display.getStringWidth(tt.c_str(),tt.length(),0);
-            display.drawString(127-w,49,tt);
+            display.drawString(127-w-rx,49,tt);
         }
         else
             display.drawString(0,49,timeStr);
@@ -305,6 +326,13 @@ void app::setup(uint32_t timeout) {
     mWebInst->setup();
 }
 
+#if defined(ENA_NOKIA) || defined(ENA_SSD1306)
+#include <Timezone.h>
+TimeChangeRule CEST = {"CEST", Last, Sun, Mar, 2, 120};     // Central European Summer Time
+TimeChangeRule CET = {"CET ", Last, Sun, Oct, 3, 60};       // Central European Standard Time
+Timezone CE(CEST, CET);
+#endif
+
 //-----------------------------------------------------------------------------
 void app::loop(void) {
     DPRINTLN(DBG_VERBOSE, F("app::loop"));
@@ -333,7 +361,7 @@ void app::loop(void) {
 static int lcnt=90000;
     if ( lcnt == 150000 )
     {
-        DataScreen(this, mUtcTimestamp);
+        DataScreen(this, CE.toLocal(mUtcTimestamp));  // UTC+1, im Sommer muss
         lcnt=0;
     }
     lcnt++;
