@@ -35,6 +35,13 @@ app::app() {
     mShouldReboot = false;
 }
 
+#if defined(ENA_NOKIA) || defined(ENA_SSD1306)
+#include <Timezone.h>
+TimeChangeRule CEST = {"CEST", Last, Sun, Mar, 2, 120};     // Central European Summer Time
+TimeChangeRule CET = {"CET ", Last, Sun, Oct, 3, 60};       // Central European Standard Time
+Timezone CE(CEST, CET);
+#endif
+
 #ifdef ENA_SSD1306
 /* esp8266 : SCL = 5, SDA = 4 */
 /* ewsp32  : SCL = 22, SDA = 21 */
@@ -48,7 +55,7 @@ static unsigned char bmp_arrow[] PROGMEM = {
 void DataScreen( app* mApp, time_t ts )
 {
 static    int extra =  0;
-    String timeStr = mApp->getDateTimeStr(ts).substring(2,22);
+    String timeStr = mApp->getDateTimeStr(CE.toLocal(ts)).substring(2,22);
     IPAddress ip = WiFi.localIP();
     float totalYield = 0.000, totalYieldToday = 0.000, totalActual = 0.0;
     char fmtText[32];
@@ -66,7 +73,6 @@ static    int extra =  0;
             record_t<> *rec = iv->getRecordStruct(RealTimeRunData_Debug);
             uint8_t pos;
             uint8_t list[] = {FLD_PAC, FLD_YT, FLD_YD};
-
             if ( !iv->isProducing(ts,rec) )
                 continue;
 
@@ -205,7 +211,7 @@ static unsigned char bmp_arrow[] U8X8_PROGMEM = {
 void DataScreen( app* mApp, time_t ts )
 {
 static    int extra =  0;
-    String timeStr = mApp->getDateTimeStr(ts).substring(2,22);
+    String timeStr = mApp->getDateTimeStr(CE.toLocal(ts)).substring(2,22);
     IPAddress ip = WiFi.localIP();
     float totalYield = 0.000, totalYieldToday = 0.000, totalActual = 0.0;
     char fmtText[32];
@@ -326,12 +332,7 @@ void app::setup(uint32_t timeout) {
     mWebInst->setup();
 }
 
-#if defined(ENA_NOKIA) || defined(ENA_SSD1306)
-#include <Timezone.h>
-TimeChangeRule CEST = {"CEST", Last, Sun, Mar, 2, 120};     // Central European Summer Time
-TimeChangeRule CET = {"CET ", Last, Sun, Oct, 3, 60};       // Central European Standard Time
-Timezone CE(CEST, CET);
-#endif
+
 
 //-----------------------------------------------------------------------------
 void app::loop(void) {
@@ -361,7 +362,7 @@ void app::loop(void) {
 static int lcnt=90000;
     if ( lcnt == 150000 )
     {
-        DataScreen(this, CE.toLocal(mUtcTimestamp));  // UTC+1, im Sommer muss
+        DataScreen(this, mUtcTimestamp);  // UTC+1, im Sommer muss
         lcnt=0;
     }
     lcnt++;
