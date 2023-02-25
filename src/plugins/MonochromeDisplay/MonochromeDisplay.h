@@ -141,8 +141,9 @@ class MonochromeDisplay {
 
                         if(fld == 1)
                         {
-                            if ( isprod )
-                                mTotal[num_inv] = iv->getValue(pos,rec);
+                            float today_this = iv->getValue(pos,rec);
+                            if ( isprod && (today_this > mTotal[num_inv]))
+                                mTotal[num_inv] = today_this;
                             totalYield += mTotal[num_inv];
                         }
                         if(fld == 2)
