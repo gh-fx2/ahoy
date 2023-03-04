@@ -116,7 +116,7 @@ class MonochromeDisplay {
 
         void DataScreen(void) {
             String timeStr = ah::getDateTimeStr(mCE.toLocal(*mUtcTs)).substring(2, 22);
-            int hr = timeStr.substring(9,2).toInt();
+            int hr = timeStr.substring(9,11).toInt();
             IPAddress ip = WiFi.localIP();
             float totalYield = 0.0, totalYieldToday = 0.0, totalActual = 0.0;
             char fmtText[32];
@@ -125,31 +125,49 @@ class MonochromeDisplay {
 
             memset( pow_i, 0, sizeof(unsigned int)* MAX_NUM_INVERTERS );
             if ( hr < mLastHour )  // next day ? reset today-values
+            {
                 memset( mToday, 0, sizeof(float)*MAX_NUM_INVERTERS );
+                memset( yDayPanel, 0, sizeof(int)*4);
+            }
             mLastHour = hr;
 
             for (uint8_t id = 0; id < mSys->getNumInverters(); id++) {
                 Inverter<> *iv = mSys->getInverterByPos(id);
+                if ( num_inv == 2 )  /* max 2 inverters */
+                   break;
                 if (NULL != iv) {
                     record_t<> *rec = iv->getRecordStruct(RealTimeRunData_Debug);
                     uint8_t pos;
                     uint8_t list[] = {FLD_PAC, FLD_YT, FLD_YD};
 
+                    int isprod = iv->isProducing(*mUtcTs,rec);
+
+                    for(uint8_t i = 1; ( i <= iv->channels ) && (i<=2); i++)
+                    { /* get 1st two panel values */
+                        float today_this;
+                        pos = iv->getPosByChFld(i, FLD_YD, rec);
+                        today_this = isprod ? iv->getValue(pos, rec) : 0;
+                        if ( today_this > yDayPanel[num_inv*2+i-1] )
+                            yDayPanel[num_inv*2+i-1] = today_this;
+                        pos = iv->getPosByChFld(i, FLD_PDC, rec);
+                        yPowPanel[num_inv*2+i-1] = isprod ? iv->getValue(pos, rec) : 0;
+                    }
+
                     for (uint8_t fld = 0; fld < 3; fld++) {
                         pos = iv->getPosByChFld(CH0, list[fld],rec);
-                        int isprod = iv->isProducing(*mUtcTs,rec);
 
                         if(fld == 1)
                         {
-                            float today_this = iv->getValue(pos,rec);
-                            if ( isprod && (today_this > mTotal[num_inv]))
-                                mTotal[num_inv] = today_this;
+                            float total_this = iv->getValue(pos,rec);
+                            if ( isprod && (total_this > mTotal[num_inv]))
+                                mTotal[num_inv] = total_this;
                             totalYield += mTotal[num_inv];
                         }
                         if(fld == 2)
                         {
-                            if ( isprod )
-                                mToday[num_inv] = iv->getValue(pos,rec);
+                            float today_this = iv->getValue(pos,rec);
+                            if ( isprod && (today_this > mToday[num_inv]))
+                                mToday[num_inv] = today_this;
                             totalYieldToday += mToday[num_inv];
                         }
                         if((fld == 0) && isprod )
@@ -164,7 +182,7 @@ class MonochromeDisplay {
             }
             /* u8g2_font_open_iconic_embedded_2x_t 'D' + 'G' + 'J' */
             mDisplay.clear();
-            #if defined(ENA_NOKIA)
+#if defined(ENA_NOKIA)
                 mDisplay.firstPage();
                 do {
                     if(ucnt) {
@@ -182,27 +200,51 @@ class MonochromeDisplay {
                     }
                     mDisplay.drawHLine(2,20,78);
                     mDisplay.setFont(u8g2_font_5x8_tr);
-                    mDisplay.setCursor(5,29);
+
                     if (( num_inv < 2 ) || !(mExtra%2))
                     {
+                        mDisplay.setCursor(5+mExtra%2,29);
                         sprintf(fmtText,"%4.0f",totalYieldToday);
                         mDisplay.print(F("today ")+String(fmtText)+F(" Wh"));
-                        mDisplay.setCursor(5,37);
+                        mDisplay.setCursor(5+mExtra%2,37);
                         sprintf(fmtText,"%.1f",totalYield);
                         mDisplay.print(F("total ")+String(fmtText)+F(" kWh"));
                     }
                     else
                     {
                         int id1=(mExtra/2)%(num_inv-1);
-                        if( pow_i[id1] )
-                            mDisplay.print(F("#")+String(id1+1)+F("  ")+String(pow_i[id1])+F(" W"));
+                        int yloo=(mExtra/num_inv)%2;
+                        mDisplay.setCursor(3,29);
+                        if ( yloo )
+                        {
+                            mDisplay.print(F(" "+String(yPowPanel[id1*2+0])+F(" W")));
+                            mDisplay.setCursor(64,29);
+                            mDisplay.print(F(" "+String(yPowPanel[id1*2+1])+F(" W")));
+                            if ( id1 < (int)num_inv-2 )
+                            {
+                                mDisplay.setCursor(3,37);
+                                mDisplay.print(F(" "+String(yPowPanel[id1*2+2])+F(" W")));
+                                mDisplay.setCursor(64,37);
+                                mDisplay.print(F(" "+String(yPowPanel[id1*2+3])+F(" W")));
+                            }
+                        }
                         else
-                            mDisplay.print(F("#")+String(id1+1)+F("  -----"));
-                        mDisplay.setCursor(5,37);
-                        if( pow_i[id1+1] )
-                            mDisplay.print(F("#")+String(id1+2)+F("  ")+String(pow_i[id1+1])+F(" W"));
-                        else
-                            mDisplay.print(F("#")+String(id1+2)+F("  -----"));
+                        {
+                            sprintf(fmtText,"%.1f",yDayPanel[id1*2+0]);
+                            mDisplay.print(F(""+String(fmtText)+F(" Wh")));
+                            mDisplay.setCursor(64,29);
+                            sprintf(fmtText,"%.1f",yDayPanel[id1*2+1]);
+                            mDisplay.print(F(""+String(fmtText)+F(" Wh")));
+                            if ( id1 < (int)num_inv-2 )
+                            {
+                                sprintf(fmtText,"%.1f",yDayPanel[id1*2+2]);
+                                mDisplay.setCursor(3,37);
+                                mDisplay.print(F(""+String(fmtText)+F(" Wh")));
+                                mDisplay.setCursor(64,37);
+                                sprintf(fmtText,"%.1f",yDayPanel[id1*2+3]);
+                                mDisplay.print(F(""+String(fmtText)+F(" Wh")));
+                            }
+                        }
                     }
                     if ( !(mExtra%10) && ip ) {
                         mDisplay.setCursor(5,47);
@@ -216,7 +258,8 @@ class MonochromeDisplay {
                     mDisplay.sendBuffer();
                 } while( mDisplay.nextPage() );
                 mExtra++;
-        #else // ENA_SSD1306
+#else // ENA_SSD1306
+
             if(mUp) {
                 mRx += 2;
                 if(mRx >= 20)
@@ -243,42 +286,94 @@ class MonochromeDisplay {
             }
             mDisplay.setFont(ArialMT_Plain_16);
 
-            if (( num_inv < 2 ) || !(mExtra%2))
+            if (( num_inv !=2 ) || (phase==0))
             {
                 sprintf(fmtText,"%4.0f",totalYieldToday);
                 mDisplay.drawString(5,22,F("today ")+String(fmtText)+F(" Wh"));
                 sprintf(fmtText,"%.1f",totalYield);
                 mDisplay.drawString(5,35,F("total  ")+String(fmtText)+F(" kWh"));
             }
-            else
+            else if ( phase == 1 )
             {
-                int id1=(mExtra/2)%(num_inv-1);
-                if( pow_i[id1] )
-                    mDisplay.drawString(15,22,F("#")+String(id1+1)+F("  ")+String(pow_i[id1])+F(" W"));
-                else
-                    mDisplay.drawString(15,22,F("#")+String(id1+1)+F("  -----"));
-                if( pow_i[id1+1] )
-                    mDisplay.drawString(15,35,F("#")+String(id1+2)+F("  ")+String(pow_i[id1+1])+F(" W"));
-                else
-                    mDisplay.drawString(15,35,F("#")+String(id1+2)+F("  -----"));
+                mDisplay.drawString(5,22,F("1: ")+String(yPowPanel[0]));
+                mDisplay.drawString(70,22,F("")+String(yPowPanel[1]));
+                if ( num_inv > 1 )
+                {
+                    mDisplay.drawString(5,35,F("2: ")+String(yPowPanel[2]));
+                    mDisplay.drawString(70,35,F("")+String(yPowPanel[3]));
+                }
+                mDisplay.drawString(100,49,F("W"));
+                mDisplay.drawString(67,49,F("D"));
+                mDisplay.drawString(31,49,F("Inv"));
+                mDisplay.fillRect(4,51,20,14);
+                mDisplay.setColor( BLACK );
+                mDisplay.drawString(8,49,F("P"));
+                mDisplay.setColor( WHITE );
             }
+            else if ( phase == 2 )
+            {
+                if( pow_i[0] )
+                    mDisplay.drawString(10,22,F("1: ")+String(pow_i[0]));
+                else
+                    mDisplay.drawString(10,22,F("1: -----"));
+                if( pow_i[1] )
+                    mDisplay.drawString(10,35,F("2: ")+String(pow_i[1]));
+                else
+                    mDisplay.drawString(10,35,F("2: -----"));
+                mDisplay.drawString(100,49,F("W"));
+                mDisplay.drawString(67,49,F("D"));
+                mDisplay.drawString(8,49,F("P"));
+                mDisplay.fillRect(28,51,28,14);
+                mDisplay.setColor( BLACK );
+                mDisplay.drawString(31,49,F("Inv"));
+                mDisplay.setColor( WHITE );
+            }
+            else if ( phase == 3 )
+            {
+                sprintf(fmtText,"%.0f",yDayPanel[0]);
+                mDisplay.drawString(3,22,F("1: ")+String(fmtText));
+                sprintf(fmtText,"%.0f",yDayPanel[1]);
+                mDisplay.drawString(70,22,F("")+String(fmtText));
+                if ( num_inv > 1 )
+                {
+                    sprintf(fmtText,"%.0f",yDayPanel[2]);
+                    mDisplay.drawString(3,35,F("2: ")+String(fmtText));
+                    sprintf(fmtText,"%.0f",yDayPanel[3]);
+                    mDisplay.drawString(70,35,F("")+String(fmtText));
+                }
+                mDisplay.drawString(100,49,F("Wh"));
+                mDisplay.fillRect(4,51,20,14);
+                mDisplay.fillRect(64,51,20,14);
+                mDisplay.setColor( BLACK );
+                mDisplay.drawString(8,49,F("P"));
+                mDisplay.drawString(67,49,F("D"));
+                mDisplay.setColor( WHITE );
+                mDisplay.drawString(31,49,F("Inv"));
+            }
+            phase++;
+            if ( phase == 4 )
+                phase = 0;
+
             mDisplay.drawLine(2,23,123,23);
 
-            if ( (!(mExtra%10) && ip )|| (timeStr.length()<16))
+            if ( phase == 1 )
             {
-                mDisplay.drawString(5,49,ip.toString());
-            }
-            else
-            {
-                int w=mDisplay.getStringWidth(timeStr.c_str(),timeStr.length(),0);
-                if ( w>127 )
+                if ( (!((mExtra/4)%4) && ip )|| (timeStr.length()<16))
                 {
-                    String tt=timeStr.substring(9,17);
-                    w=mDisplay.getStringWidth(tt.c_str(),tt.length(),0);
-                    mDisplay.drawString(127-w-mRx,49,tt);
+                    mDisplay.drawString(5,49,ip.toString());
                 }
                 else
-                    mDisplay.drawString(0,49,timeStr);
+                {
+                    int w=mDisplay.getStringWidth(timeStr.c_str(),timeStr.length(),0);
+                    if ( 1 || w>127 )
+                    {
+                        String tt=timeStr.substring(9,17);
+                        w=mDisplay.getStringWidth(tt.c_str(),tt.length(),0);
+                        mDisplay.drawString(127-w-mRx,49,tt);
+                    }
+                    else
+                        mDisplay.drawString(0,49,timeStr);
+                }
             }
 
             mDisplay.display();
@@ -298,6 +393,10 @@ class MonochromeDisplay {
         bool mNewPayload;
         float mTotal[ MAX_NUM_INVERTERS ];
         float mToday[ MAX_NUM_INVERTERS ];
+        unsigned int yPowPanel[ 8 ];
+        float        yDayPanel[ 8 ];
+        int         phase;
+
         uint32_t *mUtcTs;
         int mLastHour;
         HMSYSTEM *mSys;
