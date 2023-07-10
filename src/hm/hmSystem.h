@@ -112,6 +112,9 @@ class HmSystem {
             Radio.enableDebug();
         }
 
+        bool hichi_present;
+        int hichi;
+
     private:
         INVERTERTYPE mInverter[MAX_INVERTER];
         uint8_t mNumInv;

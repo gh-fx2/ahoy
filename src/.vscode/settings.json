@@ -75,4 +75,5 @@
         "streambuf": "cpp",
         "cinttypes": "cpp"
     },
+    "C_Cpp.dimInactiveRegions": false,
 }

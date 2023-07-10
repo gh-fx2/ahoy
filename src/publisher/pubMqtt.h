@@ -155,6 +155,10 @@ class PubMqtt {
             mClient.subscribe(topic, QOS_0);
         }
 
+        void osubscribe( const char *subTopic) {
+            mClient.subscribe(subTopic, QOS_0);
+        }
+
         void setSubscriptionCb(subscriptionCb cb) {
             mSubscriptionCb = cb;
         }
@@ -264,6 +268,7 @@ class PubMqtt {
             subscribe("ctrl/#");
             subscribe("setup/#");
             subscribe("status/#");
+            osubscribe("tele/hichi/SENSOR");
         }
 
         void onDisconnect(espMqttClientTypes::DisconnectReason reason) {
@@ -293,7 +298,7 @@ class PubMqtt {
         }
 
         void onMessage(const espMqttClientTypes::MessageProperties& properties, const char* topic, const uint8_t* payload, size_t len, size_t index, size_t total) {
-            DPRINTLN(DBG_VERBOSE, F("MQTT got topic: ") + String(topic));
+//          DBGPRINTLN( F("MQTT got topic: ") + String(topic));
             if(NULL == mSubscriptionCb)
                 return;
 
@@ -308,6 +313,20 @@ class PubMqtt {
                 strncpy(pyld, (const char*)payload, len);
                 pyld[len] = '\0';
                 root["val"] = atoi(pyld);
+                /* xtra-code hichi */
+                if ( !strncmp(tpc,"tele/hichi/SENSOR",17))
+                {
+                    char *p = strstr(pyld,"power_curr");
+                    if ( p )
+                    {
+//                      DBGPRINTLN(String("curr=")+String(atoi(p+12)));
+                        mSys->hichi=atoi(p+12);
+                        mSys->hichi_present=1;
+                        delete[] pyld;
+                        delete[] tpc;
+                        return;
+                    }
+                }
                 delete[] pyld;
             }
 

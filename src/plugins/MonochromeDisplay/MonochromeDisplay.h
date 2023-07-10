@@ -18,13 +18,24 @@
 #include "../../utils/helper.h"
 #include "../../hm/hmSystem.h"
 
+static uint8_t bmp_plug[] DISP_PROGMEM = {
+    B00000000, B00011000, B00000000, B00011100,
+    B01000000, B00000111, B11000000, B11000111,
+    B11100000, B11100011, B11110000, B01110111,
+    B11111000, B00111111, B11110000, B00011111,
+    B11111000, B00111111, B11110000, B00011111,
+    B11110000, B00001111, B11111000, B00000111,
+    B11011100, B00000011, B00001110, B00000000,
+    B00000111, B00000000, B00000010, B00000000
+    };
+
 static uint8_t bmp_arrow[] DISP_PROGMEM = {
     B00000000, B00011100, B00011100, B00001110, B00001110, B11111110, B01111111,
     B01110000, B01110000, B00110000, B00111000, B00011000, B01111111, B00111111,
-    B00011110, B00001110, B00000110, B00000000, B00000000, B00000000, B00000000};
+    B00011110, B00001110, B00000110, B00000000, B00000000, B00000000, B00000000 };
 
 static TimeChangeRule CEST = {"CEST", Last, Sun, Mar, 2, 120};     // Central European Summer Time
-static TimeChangeRule CET = {"CET ", Last, Sun, Oct, 3, 60};       // Central European Standard Tim
+static TimeChangeRule CET = {"CET ", Last, Sun, Oct, 3, 60};       // Central European Standard Time
 
 template<class HMSYSTEM>
 class MonochromeDisplay {
@@ -185,18 +196,29 @@ class MonochromeDisplay {
 #if defined(ENA_NOKIA)
                 mDisplay.firstPage();
                 do {
-                    if(ucnt) {
-                        mDisplay.drawXBMP(10,1,8,17,bmp_arrow);
-                        mDisplay.setFont(u8g2_font_logisoso16_tr);
-                        mDisplay.setCursor(25,17);
-                        sprintf(fmtText,"%3.0f",totalActual);
-                        mDisplay.print(String(fmtText)+F(" W"));
+                    if ( !mSys->hichi_present || mExtra%2 )
+                    {
+                        if(ucnt) {
+                            mDisplay.drawXBMP(10,1,8,17,bmp_arrow);
+                            mDisplay.setFont(u8g2_font_logisoso16_tr);
+                            mDisplay.setCursor(25,17);
+                            sprintf(fmtText,"%3.0f",totalActual);
+                            mDisplay.print(String(fmtText)+F(" W"));
+                        }
+                        else
+                        {
+                            mDisplay.setFont(u8g2_font_logisoso16_tr  );
+                            mDisplay.setCursor(10,17);
+                            mDisplay.print(String(F("offline")));
+                        }
                     }
                     else
                     {
+                        mDisplay.drawXBMP(1,1,16,16,bmp_plug);
                         mDisplay.setFont(u8g2_font_logisoso16_tr  );
-                        mDisplay.setCursor(10,17);
-                        mDisplay.print(String(F("offline")));
+                        mDisplay.setCursor(20,17);
+                        sprintf(fmtText,"%d",mSys->hichi);
+                        mDisplay.print(String(fmtText)+F(" W"));
                     }
                     mDisplay.drawHLine(2,20,78);
                     mDisplay.setFont(u8g2_font_5x8_tr);
@@ -217,32 +239,32 @@ class MonochromeDisplay {
                         mDisplay.setCursor(3,29);
                         if ( yloo )
                         {
-                            mDisplay.print(F(" "+String(yPowPanel[id1*2+0])+F(" W")));
-                            mDisplay.setCursor(64,29);
-                            mDisplay.print(F(" "+String(yPowPanel[id1*2+1])+F(" W")));
+                            mDisplay.print(String(" "+String(yPowPanel[id1*2+0])+String(" W")));
+                            mDisplay.setCursor(60,29);
+                            mDisplay.print(String(" "+String(yPowPanel[id1*2+1])+String(" W")));
                             if ( id1 < (int)num_inv-2 )
                             {
                                 mDisplay.setCursor(3,37);
-                                mDisplay.print(F(" "+String(yPowPanel[id1*2+2])+F(" W")));
-                                mDisplay.setCursor(64,37);
-                                mDisplay.print(F(" "+String(yPowPanel[id1*2+3])+F(" W")));
+                                mDisplay.print(String(" "+String(yPowPanel[id1*2+2])+String(" W")));
+                                mDisplay.setCursor(60,37);
+                                mDisplay.print(String(" "+String(yPowPanel[id1*2+3])+String(" W")));
                             }
                         }
                         else
                         {
                             sprintf(fmtText,"%.1f",yDayPanel[id1*2+0]);
-                            mDisplay.print(F(""+String(fmtText)+F(" Wh")));
-                            mDisplay.setCursor(64,29);
+                            mDisplay.print(String(""+String(fmtText)+String(" Wh")));
+                            mDisplay.setCursor(60,29);
                             sprintf(fmtText,"%.1f",yDayPanel[id1*2+1]);
-                            mDisplay.print(F(""+String(fmtText)+F(" Wh")));
+                            mDisplay.print(String(""+String(fmtText)+F(" Wh")));
                             if ( id1 < (int)num_inv-2 )
                             {
                                 sprintf(fmtText,"%.1f",yDayPanel[id1*2+2]);
                                 mDisplay.setCursor(3,37);
-                                mDisplay.print(F(""+String(fmtText)+F(" Wh")));
-                                mDisplay.setCursor(64,37);
+                                mDisplay.print(String(""+String(fmtText)+String(" Wh")));
+                                mDisplay.setCursor(60,37);
                                 sprintf(fmtText,"%.1f",yDayPanel[id1*2+3]);
-                                mDisplay.print(F(""+String(fmtText)+F(" Wh")));
+                                mDisplay.print(String(""+String(fmtText)+String(" Wh")));
                             }
                         }
                     }
@@ -271,18 +293,29 @@ class MonochromeDisplay {
             }
             int ex = 2*( mExtra % 5 );
 
-            if(ucnt) {
-                mDisplay.setBrightness(63);
-                mDisplay.drawXbm(10+ex,5,8,17,bmp_arrow);
-                mDisplay.setFont(ArialMT_Plain_24);
-                sprintf(fmtText,"%3.0f",totalActual);
-                mDisplay.drawString(25+ex,0,String(fmtText)+F(" W"));
+            if ( !mSys->hichi_present || mExtra%2 )
+            {
+                if(ucnt) {
+                    mDisplay.setBrightness(63);
+                    mDisplay.drawXbm(10+ex,5,8,17,bmp_arrow);
+                    mDisplay.setFont(ArialMT_Plain_24);
+                    sprintf(fmtText,"%3.0f",totalActual);
+                    mDisplay.drawString(25+ex,0,String(fmtText)+F(" W"));
+                }
+                else
+                {
+                    mDisplay.setBrightness(1);
+                    mDisplay.setFont(ArialMT_Plain_24);
+                    mDisplay.drawString(25+ex,0,String(F("offline")));
+                }
             }
             else
             {
-                mDisplay.setBrightness(1);
+                mDisplay.setBrightness(63);
+                mDisplay.drawXbm(1+ex,5,16,16,bmp_plug);
                 mDisplay.setFont(ArialMT_Plain_24);
-                mDisplay.drawString(25+ex,0,String(F("offline")));
+                sprintf(fmtText,"%d",mSys->hichi);
+                mDisplay.drawString(20+ex,0,String(fmtText)+F(" W"));
             }
             mDisplay.setFont(ArialMT_Plain_16);
 
